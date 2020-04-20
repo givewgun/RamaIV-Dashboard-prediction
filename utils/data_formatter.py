@@ -10,14 +10,16 @@ THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 east_w = []
 east_seg = []
 east_seg_id = {}
+east_id_to_seg = {}
 west_w = []
 west_seg = []
 west_seg_id = {}
+west_id_to_seg = {}
 rama_iv_way = []
 
 def load_segment():
-    global east_w, east_seg, east_seg_id, west_w, west_seg, west_seg_id, rama_iv_way
-    print(THIS_FOLDER)
+    global east_w, east_seg, east_seg_id, west_w, west_seg, west_seg_id, rama_iv_way, east_id_to_seg, west_id_to_seg 
+    # print(THIS_FOLDER)
     ways_json_f = os.path.join(THIS_FOLDER, 'mapping', 'segment.json')
     with open(ways_json_f) as json_file:
         ways_json = json_file.read()
@@ -37,12 +39,14 @@ def load_segment():
     east_seg_id = lon_seg['east_seg_id']
     west_seg_id = lon_seg['west_seg_id']
     east_seg_id = { float(key):value for key,value in east_seg_id.items()}
+    east_id_to_seg = {val:key for key,val in east_seg_id.items()}
     west_seg_id = { float(key):value for key,value in west_seg_id.items()}
+    west_id_to_seg = {val:key for key,val in west_seg_id.items()}
 
 load_segment()
 
-def get_format_date():
-    now = datetime.datetime.now()
+def get_format_date(cur_datetime):
+    now = datetime.datetime.strptime(cur_datetime, "%Y/%m/%d %H:%M:%S")
     # now = datetime.datetime(2019, 8, 30, 17, 0, 59, 342380)
     cur_date = now.date()
     rounded_time = datetime.datetime.fromtimestamp(now.timestamp() // 60 * 60) #every 5 minutes (rounded floor)
@@ -74,9 +78,9 @@ def find_time_col(begin_time, cur_time, x):
 
 def format_input(df, begin_time, cur_time):
     #filter the way in geojsonfirst
-    print(df.dtypes)
+    # print(df.dtypes)
     df = df[df['wayids'].isin(rama_iv_way)].reset_index().drop(['index'], axis = 1)
-    print(df.shape)
+    # print(df.shape)
     #apply segment w or e 
     df['direction'] = 'w'
     df.loc[df['wayids'].isin(east_w), 'direction'] = 'e'
@@ -85,15 +89,12 @@ def format_input(df, begin_time, cur_time):
     df['segment'] = df.apply(lambda row: east_seg_id[round(row['lon3'],3)] if row['direction'] == 'e'\
                              else west_seg_id[round(row['lon3'],3)] + max(east_seg_id.values())+1, axis = 1)
 
-    print(df.head())
     #find average speed per time
     df = df.groupby(['segment','time'])
     df = df.mean()['speed_mps'].reset_index()
-    print(df.head())
 
     #create way_idx - time_step avg matrix
     avg_speed_mtx = np.full((max(east_seg_id.values())+1 + max(west_seg_id.values())+1, find_time_col(begin_time, cur_time, cur_time)), np.nan)
-    print()
     for r in df.itertuples():
         col = find_time_col(begin_time, cur_time, str(r[2]))
         if col < avg_speed_mtx.shape[1]:
@@ -101,7 +102,7 @@ def format_input(df, begin_time, cur_time):
 
     #normalize input
     avg_speed_mtx = normalize_matrix(avg_speed_mtx)
-    print(avg_speed_mtx.shape)
+    # print(avg_speed_mtx.shape)
     
     #fill nan with 0
     avg_speed_mtx = np.nan_to_num(avg_speed_mtx)
@@ -109,7 +110,33 @@ def format_input(df, begin_time, cur_time):
 
     avg_speed_mtx= np.reshape(avg_speed_mtx, avg_speed_mtx.shape + (1,))
     avg_speed_mtx = np.asarray([avg_speed_mtx])
-    print(avg_speed_mtx)
+    # print(avg_speed_mtx)
 
 
     return avg_speed_mtx
+
+def format_output(mtx, cur_time):
+    #output consists of 100(seg) * 2(10min) = 200 datapoints
+    cur_time = datetime.datetime.strptime(cur_time, '%H:%M:%S')
+    next_5min = (cur_time + datetime.timedelta(minutes = 5)).strftime('%H:%M')
+    next_10min = (cur_time + datetime.timedelta(minutes = 10)).strftime('%H:%M')
+    mtx = mtx[0]
+    df = []
+    for i in range(0,len(mtx),2):
+        idx = i // 2
+        if idx < len(east_id_to_seg):
+            df.append(["east", east_id_to_seg[idx], next_5min, mtx[i]])
+            df.append(["east", east_id_to_seg[idx], next_10min, mtx[i+1]])
+        else:
+            idx = idx - len(east_id_to_seg)
+            df.append(["west", west_id_to_seg[idx], next_5min, mtx[i]])
+            df.append(["west", west_id_to_seg[idx], next_10min, mtx[i+1]])
+    
+    df = pd.DataFrame(df, columns =['direction', 'lon3', 'time', 'speed'])
+    df['speed'] = (df['speed'] * (18/5)).round(2) #m/s to km/h
+    df.rename({'speed':'speed_kph'}, axis=1, inplace=True)
+    # df['speed_kph'].round(2)
+    # print(df.dtypes)
+    # print(df)
+    return df
+

@@ -1,3 +1,7 @@
 .vscode/
 venv/
 gcloud_credential.json
+inp.csv
+response.json
+test.csv
+utils/__pycache__

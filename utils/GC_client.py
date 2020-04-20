@@ -3,7 +3,7 @@ import pandas
 import datetime
 from google.cloud import bigquery
 
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"""C:\Users\givew\Documents\senior\predict-server\gcloud_credential.json"""
+# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"""C:\Users\givew\Documents\senior\predict-server\gcloud_credential.json"""
 client = bigquery.Client()
 
 
@@ -28,7 +28,7 @@ def fetch_data(time, cur_date, prev_date):
     project_id = 'taxi-272612'
     df = client.query(query, project=project_id).to_dataframe()
     print("FINISH FETCHING")
-    df.to_csv('test.csv')
+    # df.to_csv('test.csv')
     return df
     
 

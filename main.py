@@ -35,7 +35,7 @@ def predict():
     pred = model.predict(out)
     print("finished prediction")
     # print(pred)
-    pred = fmt.format_output(pred, cur_time)
+    df = fmt.format_output(pred, cur_time)
     print("finished formatting output")
     # print(pred)
     return json.dumps({'df' : df.to_json(orient='split', date_format='iso')})
@@ -47,7 +47,7 @@ def test_post():
     return 'Hello World!'
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 
 # predict()
